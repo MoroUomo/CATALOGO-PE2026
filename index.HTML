@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Catalogo Moro - Collezione PE26</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&family=Playfair+Display:wght@700&display=swap" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
+
+    <style>
+        :root { --dark: #1a1a1a; --light-grey: #f8f8f8; --border: #e1e1e1; }
+        body { font-family: 'Inter', sans-serif; margin: 0; background-color: #fff; color: var(--dark); -webkit-tap-highlight-color: transparent; }
+        header { text-align: center; padding: 30px 20px; border-bottom: 1px solid var(--border); }
+        .logo-aziendale { max-width: 180px; height: auto; margin-bottom: 10px; }
+        h2.stagione-titolo { font-family: 'Playfair Display', serif; font-size: 1.4rem; letter-spacing: 2px; margin: 0; text-transform: uppercase; }
+        
+        .controls { display: flex; justify-content: center; align-items: center; gap: 10px; padding: 15px; background: var(--light-grey); position: sticky; top: 0; z-index: 1000; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
+        input, select { padding: 10px; border: 1px solid var(--border); border-radius: 4px; font-size: 13px; background: white; min-width: 160px; }
+        
+        .container { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 30px; padding: 30px; max-width: 1400px; margin: 0 auto; }
+        .card { background: white; padding: 10px; border: 1px solid transparent; transition: 0.3s; }
+        .image-container { position: relative; width: 100%; height: 380px; background-color: #fcfcfc; cursor: zoom-in; display: flex; align-items: center; justify-content: center; overflow: hidden; }
+        .card img { max-width: 100%; max-height: 100%; object-fit: contain; transition: filter 0.3s; }
+        
+        .card.sold-out img { filter: grayscale(1) opacity(0.5); }
+        .status-badge { display: inline-block; font-size: 11px; font-weight: 700; padding: 4px 10px; border-radius: 4px; margin-top: 10px; text-transform: uppercase; }
+        .status-sold-out { background-color: #ffebee; color: #c62828; border: 1px solid #ef9a9a; }
+
+        .info { padding: 15px 0; }
+        .cat-tessuto { font-size: 10px; color: #aaa; text-transform: uppercase; margin-bottom: 5px; font-weight: 600; }
+        .main-code { font-size: 19px; font-weight: 600; letter-spacing: 1px; margin: 0; }
+        .model-name { font-size: 14px; color: #555; text-transform: uppercase; margin-top: 2px; margin-bottom: 10px; }
+        
+        .colors-wrapper { margin-top: 12px; display: flex; flex-wrap: wrap; gap: 8px; }
+        .color-group { position: relative; display: inline-block; }
+        .color-label { font-size: 10px; font-weight: 600; text-transform: uppercase; background: #eee; padding: 5px 10px; border-radius: 3px; cursor: pointer; transition: background 0.2s; }
+        .color-label:hover { background: #e0e0e0; }
+        
+        /* Menu Tendina Nero Elegante */
+        .size-tooltip { 
+            display: none; position: absolute; bottom: 130%; left: 50%; transform: translateX(-50%); 
+            background: #222; color: white; padding: 10px 14px; border-radius: 6px; font-size: 11px; 
+            z-index: 100; box-shadow: 0 4px 15px rgba(0,0,0,0.3); min-width: 135px; text-align: left;
+        }
+        .size-tooltip::after { content: ""; position: absolute; top: 100%; left: 50%; margin-left: -5px; border-width: 5px; border-style: solid; border-color: #222 transparent transparent transparent; }
+        .size-row-item { display: flex; justify-content: space-between; gap: 15px; margin-bottom: 4px; border-bottom: 1px solid #444; padding-bottom: 3px; }
+        .size-row-item:last-child { margin-bottom: 0; border-bottom: none; padding-bottom: 0; }
+        .qty-val { font-weight: bold; color: #81c784; }
+
+        .price-row { margin-top: 15px; font-weight: 600; font-size: 18px; border-top: 1px solid #eee; padding-top: 10px; }
+        #overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.9); z-index: 2000; justify-content: center; align-items: center; cursor: zoom-out; }
+        #overlay img { max-width: 90%; max-height: 90%; object-fit: contain; background: white; padding: 10px; }
+        @media (max-width: 600px) { .image-container { height: 320px; } input, select { min-width: 100%; } }
+    </style>
+</head>
+<body>
+
+<div id="overlay" onclick="this.style.display='none'"><img id="overlayImg" src=""></div>
+
+<header>
+    <img src="https://i.postimg.cc/FH1ZZHHZ/logo.png" alt="Logo" class="logo-aziendale" onerror="this.style.display='none'">
+    <h2 class="stagione-titolo">Collezione P/E 2026</h2>
+</header>
+
+<div class="controls">
+    <input type="text" id="searchBar" placeholder="Cerca codice o modello..." onkeyup="filterProducts()">
+    <select id="categoryFilter" onchange="filterProducts()"><option value="all">Tutte le Categorie</option></select>
+    <select id="tessutoFilter" onchange="filterProducts()"><option value="all">Tutti i Tessuti</option></select>
+    <select id="colorFilter" onchange="filterProducts()"><option value="all">Tutti i Colori</option></select>
+</div>
+
+<div class="container" id="catalog-container"></div>
+
+<script>
+    // Link base di Google Sheets condiviso con "Chiunque abbia il link può visualizzare"
+    const SHEET_URL = 'https://docs.google.com/spreadsheets/d/1729qkHeJ-dewiDTyC-68zfBiXeO_CW_hk0gyZtGTvsg/edit?gid=0#gid=0';
+    
+    const BASE_CSV_URL = SHEET_URL.split('/edit')[0] + '/export?format=csv';
+    const MAIN_CSV_URL = BASE_CSV_URL + '&gid=0'; 
+    const STOCK_CSV_URL = BASE_CSV_URL + '&sheet=Magazzino'; // Si collega alla scheda che hai creato
+
+    const LISTA_COLORI = ['BLU', 'AVIO', 'CACAO', 'GRIGIO', 'PANNA', 'NERO', 'BORDEAUX', 'MORO', 'SALVIA', 'VERDE', 'PERLA', 'BEIGE', 'FANGO', 'SAFARI', 'LAVAGNA', 'MASTICE', 'GHIACCIO', 'GRIGIO CH.', 'GRIGIO SC.', 'ANTRACITE', 'CAMMELLO', 'TABACCO', 'ROSA', 'CELESTE', 'BLUETTE', 'BIANCO', 'TERRA', 'VERDE ACQUA', 'ECRU\'', 'DENIM', 'AZZURRO', 'CHIARO', 'SCURO', 'MEDIO', 'ROSSO', 'BRONZO', 'PETROLIO', 'CREMA', 'BRUCIATO', 'UNICO', 'TURCHESE'];
+    const TAGLIE_HEADER = ['44', '46', '48', '50', '52', '54', '56', '58', '60', '62', '64'];
+
+    let allProducts = [];
+    let stockData = [];
+
+    function loadData() {
+        // Legge la nuova scheda semplificata del Magazzino
+        Papa.parse(STOCK_CSV_URL, {
+            download: true, header: true, skipEmptyLines: true,
+            complete: function(stockResults) {
+                stockData = stockResults.data.map(row => {
+                    let cleanedRow = {};
+                    for (let key in row) {
+                        let cleanedKey = key.trim();
+                        cleanedRow[cleanedKey] = row[key] ? row[key].trim() : "";
+                    }
+                    return cleanedRow;
+                });
+                caricaCatalogoPrincipale();
+            },
+            error: function() {
+                console.warn("Scheda 'Magazzino' non trovata. Uso modalità standard.");
+                caricaCatalogoPrincipale();
+            }
+        });
+    }
+
+    function caricaCatalogoPrincipale() {
+        Papa.parse(MAIN_CSV_URL, {
+            download: true, header: true, skipEmptyLines: true,
+            complete: function(mainResults) {
+                allProducts = mainResults.data.filter(item => item.Codice && item.Codice.trim() !== "");
+                populateFilters(allProducts);
+                render(allProducts);
+            }
+        });
+    }
+
+    function populateFilters(data) {
+        const catF = document.getElementById('categoryFilter');
+        const tessF = document.getElementById('tessutoFilter');
+        const colF = document.getElementById('colorFilter');
+        
+        [...new Set(data.map(i => i.Categoria))].filter(Boolean).sort().forEach(c => catF.innerHTML += `<option value="${c}">${c}</option>`);
+        [...new Set(data.map(i => i.Tessuto))].filter(Boolean).sort().forEach(t => tessF.innerHTML += `<option value="${t}">${t}</option>`);
+        LISTA_COLORI.sort().forEach(col => colF.innerHTML += `<option value="${col}">${col}</option>`);
+    }
+
+    function filterProducts() {
+        const search = document.getElementById('searchBar').value.toLowerCase();
+        const cat = document.getElementById('categoryFilter').value;
+        const tess = document.getElementById('tessutoFilter').value;
+        const col = document.getElementById('colorFilter').value;
+
+        const filtered = allProducts.filter(i => {
+            const mSearch = ((i.Modello || '') + (i.Codice || '')).toLowerCase().includes(search);
+            const mCat = (cat === 'all' || i.Categoria === cat);
+            const mTess = (tess === 'all' || i.Tessuto === tess);
+            const mCol = (col === 'all' || (i[col] && i[col].toUpperCase().includes('SI')));
+            return mSearch && mCat && mTess && mCol;
+        });
+        render(filtered);
+    }
+
+    // Cerca l'articolo e il colore dentro la tua scheda manuale
+    function getSizesHtmlFromStock(articolo, colore, valoreManuale) {
+        if (valoreManuale.includes('|')) {
+            return `<div class="size-row-item"><span>Disponibili:</span><span class="qty-val">${valoreManuale.split('|')[1].trim()}</span></div>`;
+        }
+
+        if (stockData.length === 0) {
+            return `<div class="size-row-item"><span>Disponibile</span></div>`;
+        }
+
+        const artPuro = articolo.trim().toUpperCase();
+        const colPuro = colore.trim().toUpperCase();
+
+        // Trova la riga esatta accoppiando Articolo e Colore del tuo foglio manuale
+        const match = stockData.find(s => 
+            s.Articolo && s.Articolo.trim().toUpperCase() === artPuro &&
+            s.Colore && s.Colore.trim().toUpperCase() === colPuro
+        );
+
+        if (!match) {
+            return `<div class="size-row-item"><span>Disponibile</span></div>`;
+        }
+
+        let html = '';
+        let trovatoPezzi = false;
+
+        // Mostra a tendina solo le taglie in cui hai inserito un valore maggiore di 0
+        TAGLIE_HEADER.forEach(t => {
+            const qty = match[t] ? match[t].trim() : '';
+            const numericQty = parseInt(qty, 10);
+            if (!isNaN(numericQty) && numericQty > 0) {
+                html += `<div class="size-row-item"><span>Taglia ${t}:</span><span class="qty-val">${numericQty} pz</span></div>`;
+                trovatoPezzi = true;
+            }
+        });
+
+        return trovatoPezzi ? html : `<div class="size-row-item"><span style="color:#e57373; font-weight:bold;">Esaurito</span></div>`;
+    }
+
+    function render(data) {
+        const container = document.getElementById('catalog-container');
+        container.innerHTML = '';
+
+        data.forEach(item => {
+            let coloriHTML = '';
+            let hasColors = false;
+
+            LISTA_COLORI.forEach(col => {
+                const val = item[col] || "";
+                if (val.toUpperCase().startsWith('SI')) {
+                    hasColors = true;
+                    const tooltipContenuto = getSizesHtmlFromStock(item.Codice, col, val);
+                    coloriHTML += `<div class="color-group"><span class="color-label">${col}</span><div class="size-tooltip">${tooltipContenuto}</div></div>`;
+                }
+            });
+
+            const statusHTML = hasColors 
+                ? `<div class="colors-wrapper">${coloriHTML}</div>` 
+                : `<div class="status-badge status-sold-out">ESAURITO</div>`;
+
+            const card = document.createElement('div');
+            card.className = `card ${hasColors ? '' : 'sold-out'}`;
+            card.innerHTML = `
+                <div class="image-container" onclick="document.getElementById('overlayImg').src='${item.Link_Foto}'; document.getElementById('overlay').style.display='flex'">
+                    <img src="${item.Link_Foto}" onerror="this.src='https://placehold.co/400x600?text=Foto+In+Arrivo'">
+                </div>
+                <div class="info">
+                    <div class="cat-tessuto">${item.Categoria || ''} ${item.Tessuto ? ' - ' + item.Tessuto : ''}</div>
+                    <h2 class="main-code">${item.Codice}</h2>
+                    <div class="model-name">${item.Modello || ''}</div>
+                    ${statusHTML}
+                    <div class="price-row">€ ${item.Prezzo_Euro || '0.00'}</div>
+                </div>
+            `;
+            container.appendChild(card);
+        });
+
+        setupTooltips();
+    }
+
+    function setupTooltips() {
+        document.querySelectorAll('.color-group').forEach(group => {
+            const tooltip = group.querySelector('.size-tooltip');
+            if(tooltip) {
+                group.addEventListener('mouseenter', () => tooltip.style.display = 'block');
+                group.addEventListener('mouseleave', () => tooltip.style.display = 'none');
+                group.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    const isVis = tooltip.style.display === 'block';
+                    document.querySelectorAll('.size-tooltip').forEach(t => t.style.display = 'none');
+                    tooltip.style.display = isVis ? 'none' : 'block';
+                });
+            }
+        });
+    }
+
+    document.addEventListener('click', () => {
+        document.querySelectorAll('.size-tooltip').forEach(t => t.style.display = 'none');
+    });
+
+    window.onload = loadData;
+</script>
+</body>
+</html>
